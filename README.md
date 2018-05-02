@@ -1,3 +1,3 @@
 # SQuAD-FusionNet
 
-![ex_screenshot](./scores.png)
+![scores.jpg](./scores.jpg)
