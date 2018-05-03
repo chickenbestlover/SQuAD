@@ -24,7 +24,7 @@ class FusionNet(nn.Module):
         self.word_embeddings = nn.Embedding(word_emb.shape[0], word_dim, padding_idx=0)
         self.word_embeddings.weight.data = torch.from_numpy(word_emb)
 
-        self.char_embeddings = nn.Embedding(opts['char_size'], opts['char_dim'], padding_idx=0)
+        #self.char_embeddings = nn.Embedding(opts['char_size'], opts['char_dim'], padding_idx=0)
         self.pos_embeddings = nn.Embedding(opts['pos_size'], opts['pos_dim'], padding_idx=0)
         self.ner_embeddings = nn.Embedding(opts['ner_size'], opts['ner_dim'], padding_idx=0)
 
