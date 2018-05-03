@@ -6,6 +6,7 @@
 * pytorch 0.3.1
 * numpy
 * usjon
+* msgpack
 * spacy
 
 # data preprocess
