@@ -3,7 +3,7 @@
 
 # Requirements
 * python 3.5
-* pytorch 0.3.0
+* pytorch 0.3.1
 * numpy
 * usjon
 * spacy
