@@ -22,5 +22,6 @@ SQuAD data의 preprocess는 https://github.com/HKUST-KnowComp/R-Net 의 prepro.p
 * F1 = 81.56%
 * EM = 72.56%
 
+* 모델 학습은 네이버 클라우드 플랫폼 GPU Tesla P40 에서 batch size 256으로 학습을 진행 하였습니다. batch size가 커서 GPU 메모리 문제가 발생 할 수 있으니 batch size를 16 or 32 로 설정하시고 돌리시면 GPU 메모리 문제는 해결될 겁니다.
 
 ![scores.jpg](./scores.jpg)
