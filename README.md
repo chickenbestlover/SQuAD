@@ -1,6 +1,13 @@
 # FusionNet: Fusing via Fully-aware Attention with Application to Machine Comprehension
 * 위 코드는 해당 논문( https://openreview.net/forum?id=BJIgi_eCZ )을 구현한 코드 입니다.
 
+# Requirements
+* python 3.5
+* pytorch 0.3.0
+* numpy
+* usjon
+* spacy
+
 # data preprocess
 SQuAD data의 preprocess는 https://github.com/HKUST-KnowComp/R-Net 의 prepro.py를 약간 수정해서 사용하였습니다.
 
