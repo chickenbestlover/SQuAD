@@ -3,7 +3,7 @@
 import random
 import ujson as json
 import numpy as np
-import spacyc
+import spacy
 
 from tqdm import tqdm
 from collections import Counter
