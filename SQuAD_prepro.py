@@ -1,10 +1,9 @@
 #coding: utf-8
 
-import argparse
+import random
 import ujson as json
-import msgpack
 import numpy as np
-import spacy
+import spacyc
 
 from tqdm import tqdm
 from collections import Counter
@@ -104,7 +103,7 @@ def process_file(filename, data_type, word_counter, char_counter, pos_counter, n
                     examples.append(example)
                     eval_examples[str(total)] = {
                         "context": context, "spans": spans, "answers": answer_texts, "uuid": qa["id"]}
-        #random.shuffle(examples)
+        random.shuffle(examples)
         print("{} questions in total".format(len(examples)))
     return examples, eval_examples
 
