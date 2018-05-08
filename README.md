@@ -16,7 +16,9 @@ SQuAD data의 preprocess는 https://github.com/HKUST-KnowComp/R-Net 의 prepro.p
 * 논문에서는 question에서 자주 나오는 단어 top 1000개의 단어 임베딩만 학습을 시키고 나머지는 fix 하였지만, 위 코드에서는 모든 단어 임베딩을 fix 하였습니다.
 
 # Quick start
-* python SQuAD_prepro.py 를 이용해 data를 preprocess 한 후에 python train.py
+1. ./download.sh
+2. python3 SQuAD_prepro.py
+3. python3 train.py
 
 # 성능표
 * F1 = 81.56%
