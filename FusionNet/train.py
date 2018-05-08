@@ -7,7 +7,7 @@ from utils.dataset import load_data, get_batches
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--data_path', default='../SQuAD/')
-parser.add_argument('--model_dir', default='train_model/atch256_dropout0.3_hidden125-250',
+parser.add_argument('--model_dir', default='train_model/batch256_dropout0.3_hidden125-250',
                     help = 'path to store saved models.')
 parser.add_argument('--seed', default=8191)
 parser.add_argument('--cuda', default=True,
@@ -15,8 +15,8 @@ parser.add_argument('--cuda', default=True,
 
 ### parameters ###
 parser.add_argument('--epochs', type = int, default=50)
-parser.add_argument('--eval', type = bool, default=True)
-parser.add_argument('--batch_size', type = int, default=16)
+parser.add_argument('--eval', type = bool, default=False)
+parser.add_argument('--batch_size', type = int, default=256)
 parser.add_argument('--lrate', type = float, default=0.002)
 parser.add_argument('--dropout', type = float, default=0.3)
 parser.add_argument('--char_dim', type = int, default=50)
@@ -31,6 +31,8 @@ parser.add_argument('--decay', type = int, default=0.85)
 
 args = parser.parse_args()
 torch.manual_seed(args.seed)
+
+
 
 def train() :
 
