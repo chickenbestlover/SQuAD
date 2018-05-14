@@ -10,5 +10,9 @@ mkdir -p glove
 wget http://nlp.stanford.edu/data/glove.840B.300d.zip -O glove/glove.840B.300d.zip
 unzip $GLOVE_DIR/glove.840B.300d.zip -d glove
 
+# Download Lib
+pip3 install ujson
+pip3 install spacy
+
 # Download Spacy language models
 python3 -m spacy download en
