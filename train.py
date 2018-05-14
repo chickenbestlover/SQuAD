@@ -1,5 +1,6 @@
 #coding: utf-8
 import argparse
+import os
 import torch
 import pickle as pkl
 import ujson as json
@@ -37,6 +38,11 @@ args = parser.parse_args()
 torch.manual_seed(args.seed)
 
 def train() :
+
+    if not os.path.exists('train_model/') :
+        os.makedirs('train_model/')
+    if not os.path.exists('result/') :
+        os.makedirs('result/')
 
     train_data, dev_data, word2id, char2id, opts = load_data(vars(args))
     model = FusionNet(opts)
