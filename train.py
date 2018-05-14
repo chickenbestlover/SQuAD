@@ -16,7 +16,7 @@ parser.add_argument('--use_cuda', default=True,
                     help = 'whether to use GPU acceleration.')
 
 ### parameters ###
-parser.add_argument('--epochs', type = int, default=60)
+parser.add_argument('--epochs', type = int, default=30)
 parser.add_argument('--eval', type = bool, default=True)
 parser.add_argument('--batch_size', type = int, default=32)
 parser.add_argument('--grad_clipping', type = float, default = 10)
