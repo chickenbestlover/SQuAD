@@ -3,12 +3,23 @@
 import random
 import ujson as json
 import numpy as np
+import pickle as pkl
 import spacy
+import re
 
 from tqdm import tqdm
 from collections import Counter
 
 nlp = spacy.load("en", parser=False)
+
+def space_extend(matchobj):
+    return ' ' + matchobj.group(0) + ' '
+
+def pre_proc(text) :
+    text = re.sub(u'-|\u2010|\u2011|\u2012|\u2013|\u2014|\u2015|%|\[|\]|:|\(|\)|/', space_extend, text)
+    #text = text.strip(' \n')
+    text = re.sub('\s+', ' ', text)
+    return text
 
 def word_tokenize(sent):
     doc = nlp(sent)
@@ -16,12 +27,14 @@ def word_tokenize(sent):
     text = []
     tag = []
     ent = []
+    lemma = []
     for token in doc :
         text.append(token.text)
         tag.append(token.tag_)
         ent.append(token.ent_type_)
+        lemma.append(token.lemma_)
 
-    return text, tag, ent
+    return text, tag, ent, lemma
 
 
 def convert_idx(text, tokens):
@@ -36,7 +49,7 @@ def convert_idx(text, tokens):
         current += len(token)
     return spans
 
-def process_file(filename, data_type, word_counter, char_counter, pos_counter, ner_counter):
+def process_file(filename, data_type, word_counter, char_counter, pos_counter, ner_counter, ques_word_counter):
     print("Generating {} examples...".format(data_type))
     examples = []
     eval_examples = {}
@@ -47,13 +60,22 @@ def process_file(filename, data_type, word_counter, char_counter, pos_counter, n
             for para in article["paragraphs"]:
                 context = para["context"].replace(
                     "''", '" ').replace("``", '" ')
-                context_tokens, context_tags, context_ents = word_tokenize(context)
+
+                raw_context = context
+
+                ### additional preproc ###
+                context = pre_proc(context)
+
+                context_tokens, context_tags, context_ents, context_lemmas = word_tokenize(context)
                 context_lower_tokens = [w.lower() for w in context_tokens]
                 context_chars = [list(token) for token in context_tokens]
                 spans = convert_idx(context, context_tokens)
 
                 context_pos_set = set(context_tags)
                 context_ner_set = set(context_ents)
+                counter_ = Counter(context_lower_tokens)
+                tf_total = len(context_lower_tokens)
+                context_tf = [float(counter_[w]) / float(tf_total) for w in context_lower_tokens]
                 for pos in context_pos_set :
                     pos_counter[pos] += 1
                 for ner in context_ner_set :
@@ -66,11 +88,17 @@ def process_file(filename, data_type, word_counter, char_counter, pos_counter, n
                     total += 1
                     ques = qa["question"].replace(
                         "''", '" ').replace("``", '" ')
-                    ques_tokens, ques_tags, ques_ents = word_tokenize(ques)
+                    ques = pre_proc(ques)
+                    ques_tokens, ques_tags, ques_ents, ques_lemmas = word_tokenize(ques)
+                    ques_lower_tokens = [w.lower() for w in ques_tokens]
                     ques_chars = [list(token) for token in ques_tokens]
+                    ques_lemma = {lemma if lemma != '-PRON-' else lower for lemma, lower in zip(ques_lemmas, ques_lower_tokens)}
 
                     ques_tokens_set = set(ques_tokens)
+                    ques_lower_tokens_set = set(ques_lower_tokens)
                     match_origin = [w in ques_tokens_set for w in context_tokens]
+                    match_lower = [w in ques_lower_tokens_set for w in context_lower_tokens]
+                    match_lemma = [(c_lemma if c_lemma != '-PRON-' else c_lower) in ques_lemma for (c_lemma, c_lower) in zip(context_lemmas, context_lower_tokens)]
                     ques_pos_set = set(ques_tags)
                     ques_ner_set = set(ques_ents)
                     for pos in ques_pos_set:
@@ -80,24 +108,36 @@ def process_file(filename, data_type, word_counter, char_counter, pos_counter, n
 
                     for token in ques_tokens:
                         word_counter[token] += 1
+                        ques_word_counter[token] += 1
                         for char in token:
                             char_counter[char] += 1
                     y1s, y2s = [], []
                     answer_texts = []
                     for answer in qa["answers"]:
-                        answer_text = answer["text"]
+                        answer_text = pre_proc(answer["text"])
+
                         answer_start = answer['answer_start']
                         answer_end = answer_start + len(answer_text)
+
+                        left_context = raw_context[:answer_start]
+                        left_context = pre_proc(left_context)
+
+                        mid_context = raw_context[answer_start:answer_end]
+
+                        answer_start = len(left_context)
+                        answer_end = answer_start + len(mid_context)
+
                         answer_texts.append(answer_text)
                         answer_span = []
                         for idx, span in enumerate(spans):
                             if not (answer_end <= span[0] or answer_start >= span[1]):
                                 answer_span.append(idx)
+
                         y1, y2 = answer_span[0], answer_span[-1]
                         y1s.append(y1)
                         y2s.append(y2)
 
-                    example = {"context_tokens": context_tokens, "context_chars": context_chars, "match_origin" : match_origin, "context_pos" : context_tags, "context_ner" : context_ents,
+                    example = {"context_tokens": context_tokens, "context_chars": context_chars, "match_origin" : match_origin, "match_lower" : match_lower, "match_lemma" : match_lemma, "context_pos" : context_tags, "context_ner" : context_ents, "context_tf" : context_tf,
                                "ques_tokens": ques_tokens, "ques_pos" : ques_tags, "ques_ner" : ques_ents,
                                "ques_chars": ques_chars, "y1s": y1s, "y2s": y2s, "id": total}
                     examples.append(example)
@@ -175,6 +215,9 @@ def build_features(examples, data_type, out_file, word2idx_dict, char2idx_dict, 
 
     context_ids = []
     context_match_origin = []
+    context_match_lower = []
+    context_match_lemma = []
+    context_tfs = []
     context_char_ids = []
     context_pos_ids = []
     context_ner_ids = []
@@ -194,6 +237,9 @@ def build_features(examples, data_type, out_file, word2idx_dict, char2idx_dict, 
         total += 1
         context_idxs = np.zeros([para_limit], dtype=np.int32)
         match_origin = np.zeros([para_limit], dtype=np.int32)
+        match_lower = np.zeros([para_limit], dtype=np.int32)
+        match_lemma = np.zeros([para_limit], dtype=np.int32)
+        context_tf = np.zeros([para_limit], dtype = np.float32)
         context_pos_idxs = np.zeros([para_limit], dtype=np.int32)
         context_ner_idxs = np.zeros([para_limit], dtype=np.int32)
         context_char_idxs = np.zeros([para_limit, char_limit], dtype=np.int32)
@@ -228,11 +274,18 @@ def build_features(examples, data_type, out_file, word2idx_dict, char2idx_dict, 
             context_idxs[i] = _get_word(token)
         for i, match in enumerate(example["match_origin"]) :
             match_origin[i] = 1 if match == True else 0
+        for i, match in enumerate(example["match_lower"]) :
+            match_lower[i] = 1 if match == True else 0
+        for i, match in enumerate(example["match_lemma"]) :
+            match_lemma[i] = 1 if match == True else 0
+
+        for i, tf in enumerate(example['context_tf']) :
+            context_tf[i] = tf
 
         for i, pos in enumerate(example['context_pos']) :
             context_pos_idxs[i] = _get_pos(pos)
         for i, ner in enumerate(example['context_ner']) :
-            context_ner_idxs[i] = _get_pos(ner)
+            context_ner_idxs[i] = _get_ner(ner)
 
         for i, token in enumerate(example["ques_tokens"]):
             ques_idxs[i] = _get_word(token)
@@ -240,7 +293,7 @@ def build_features(examples, data_type, out_file, word2idx_dict, char2idx_dict, 
         for i, pos in enumerate(example['ques_pos']) :
             ques_pos_idxs[i] = _get_pos(pos)
         for i, ner in enumerate(example['ques_ner']) :
-            ques_ner_idxs[i] = _get_pos(ner)
+            ques_ner_idxs[i] = _get_ner(ner)
 
 
         for i, token in enumerate(example["context_chars"]):
@@ -260,6 +313,9 @@ def build_features(examples, data_type, out_file, word2idx_dict, char2idx_dict, 
 
         context_ids.append(context_idxs.tolist())
         context_match_origin.append(match_origin.tolist())
+        context_match_lower.append(match_lower.tolist())
+        context_match_lemma.append(match_lemma.tolist())
+        context_tfs.append(context_tf.tolist())
         context_pos_ids.append(context_pos_idxs.tolist())
         context_ner_ids.append(context_ner_idxs.tolist())
         context_char_ids.append(context_char_idxs.tolist())
@@ -276,6 +332,9 @@ def build_features(examples, data_type, out_file, word2idx_dict, char2idx_dict, 
     data = {
         "context_ids" : context_ids,
         "context_match_origin" : context_match_origin,
+        "context_match_lower" : context_match_lower,
+        "context_match_lemma" : context_match_lemma,
+        "context_tf" : context_tfs,
         "context_char_ids" : context_char_ids,
         "context_pos_ids" : context_pos_ids,
         "context_ner_ids" : context_ner_ids,
@@ -294,11 +353,12 @@ def build_features(examples, data_type, out_file, word2idx_dict, char2idx_dict, 
 
 if __name__ == '__main__' :
 
+    ques_word_counter = Counter()
     word_counter, char_counter = Counter(), Counter()
     pos_counter, ner_counter = Counter(), Counter()
 
-    train_examples, train_eval = process_file('SQuAD/train-v1.1.json', "train", word_counter, char_counter, pos_counter, ner_counter)
-    dev_examples, dev_eval = process_file('SQuAD/dev-v1.1.json', "dev", word_counter, char_counter, pos_counter, ner_counter)
+    train_examples, train_eval = process_file('SQuAD/train-v1.1.json', "train", word_counter, char_counter, pos_counter, ner_counter, ques_word_counter)
+    dev_examples, dev_eval = process_file('SQuAD/dev-v1.1.json', "dev", word_counter, char_counter, pos_counter, ner_counter, ques_word_counter)
 
     pos2id = make_dict(pos_counter)
     ner2id = make_dict(ner_counter)
@@ -322,6 +382,21 @@ if __name__ == '__main__' :
                    'SQuAD/train.json', word2id, char2id, pos2id, ner2id)
     build_features(dev_examples, "dev",
                    'SQuAD/dev.json', word2id, char2id, pos2id, ner2id)
+
+
+    with open('SQuAD/ques_word_counter.pkl', 'wb') as f :
+        pkl.dump(ques_word_counter.most_common(), f)
+
+    tune_idx = []
+    count = 0
+    for i, (word, _) in enumerate(ques_word_counter.most_common()):
+        if word in word2id:
+            tune_idx.append(word2id[word])
+            count += 1
+        if count == 1000: break
+
+    with open('SQuAD/tune_word_idx.pkl', 'wb') as f:
+        pkl.dump(tune_idx, f)
 
     with open('SQuAD/train_eval.json', 'w', encoding='utf-8') as f :
         json.dump(train_eval, f)

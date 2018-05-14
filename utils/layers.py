@@ -6,9 +6,9 @@ from torch.autograd import Variable
 
 class StackedLSTM(nn.Module) :
 
-    def __init__(self, input_size, hidden_size, num_layers, dropout, concat = True) :
+    def __init__(self, input_size, hidden_size, num_layers, dropout, concat = True, use_cuda = True) :
         super(StackedLSTM, self).__init__()
-
+        self.use_cuda = use_cuda
         self.dropout = dropout
         self.concat = concat
         self.num_layers = num_layers
@@ -28,7 +28,7 @@ class StackedLSTM(nn.Module) :
 
         for layer in range(self.num_layers) :
             inp = outputs[layer]
-            d_inp = Dropout(inp, self.dropout, is_training)
+            d_inp = Dropout(inp, self.dropout, is_training, use_cuda = self.use_cuda)
 
             out, _ = self.rnns[layer](d_inp)
             outputs.append(out)
@@ -41,8 +41,9 @@ class StackedLSTM(nn.Module) :
 
 class FullAttention(nn.Module) :
 
-    def __init__(self, input_size, hidden_size, dropout):
+    def __init__(self, input_size, hidden_size, dropout, use_cuda = True):
         super(FullAttention, self).__init__()
+        self.use_cuda = use_cuda
         self.dropout = dropout
         self.input_size = input_size
         self.hidden_size = hidden_size
@@ -58,7 +59,7 @@ class FullAttention(nn.Module) :
 
         if is_training :
             keep_prob = 1.0 - self.dropout
-            drop_mask = Dropout(passage, self.dropout, is_training, True)
+            drop_mask = Dropout(passage, self.dropout, is_training, return_mask=True, use_cuda = self.use_cuda)
             d_passage = torch.div(passage, keep_prob) * drop_mask
             d_ques = torch.div(question, keep_prob) * drop_mask
         else :
@@ -82,8 +83,9 @@ class FullAttention(nn.Module) :
 
 class WordAttention(nn.Module) :
 
-    def __init__(self, input_size, hidden_size, dropout) :
+    def __init__(self, input_size, hidden_size, dropout, use_cuda = True) :
         super(WordAttention, self).__init__()
+        self.use_cuda = use_cuda
         self.dropout = dropout
         self.hidden_size = hidden_size
 
@@ -98,7 +100,7 @@ class WordAttention(nn.Module) :
 
         if is_training :
             keep_prob = 1.0 - self.dropout
-            drop_mask = Dropout(passage, self.dropout, is_training, True)
+            drop_mask = Dropout(passage, self.dropout, is_training, return_mask = True, use_cuda = self.use_cuda)
             d_passage = torch.div(passage, keep_prob) * drop_mask
             d_ques = torch.div(question, keep_prob) * drop_mask
         else :
@@ -108,19 +110,20 @@ class WordAttention(nn.Module) :
         Wp = F.relu(self.W(d_passage))
         Wq = F.relu(self.W(d_ques))
 
-        outputs = torch.bmm(Wp, Wq.transpose(2, 1))
+        scores = torch.bmm(Wp, Wq.transpose(2, 1))
 
         mask = q_mask.unsqueeze(1).repeat(1, passage.size(1), 1)
-        outputs.data.masked_fill_(mask.data, -float('inf'))
-        alpha = F.softmax(outputs, dim=2)
+        scores.data.masked_fill_(mask.data, -float('inf'))
+        alpha = F.softmax(scores, dim=2)
         output = torch.bmm(alpha, question)
 
         return output
 
 class Summ(nn.Module) :
 
-    def __init__(self, input_size, dropout) :
+    def __init__(self, input_size, dropout, use_cuda = True) :
         super(Summ, self).__init__()
+        self.use_cuda = use_cuda
         self.dropout = dropout
         self.w = nn.Linear(input_size, 1)
 
@@ -132,16 +135,18 @@ class Summ(nn.Module) :
 
     def forward(self, x, mask, is_training) :
 
-        x = Dropout(x, self.dropout, is_training)
-        beta = self.w(x).squeeze(2)
+        d_x = Dropout(x, self.dropout, is_training, use_cuda = self.use_cuda)
+        beta = self.w(d_x).squeeze(2)
         beta.data.masked_fill_(mask.data, -float('inf'))
         beta = F.softmax(beta, 1)
-        return beta
+        output = torch.bmm(beta.unsqueeze(1), x).squeeze(1)
+        return output
 
 class PointerNet(nn.Module) :
 
-    def __init__(self, input_size, dropout) :
+    def __init__(self, input_size, dropout, use_cuda = True) :
         super(PointerNet, self).__init__()
+        self.use_cuda = use_cuda
         self.dropout = dropout
 
         self.W_s = nn.Linear(input_size, input_size)
@@ -159,23 +164,23 @@ class PointerNet(nn.Module) :
 
     def forward(self, self_states, p_mask, init_states, is_training) :
 
-        d_init_states = Dropout(init_states.unsqueeze(1), self.dropout, is_training).squeeze(1)
+        d_init_states = Dropout(init_states.unsqueeze(1), self.dropout, is_training, use_cuda = self.use_cuda).squeeze(1)
         P0 = self.W_s(d_init_states)
         logits1 = torch.bmm(P0.unsqueeze(1), self_states.transpose(2, 1)).squeeze(1)
         logits1.data.masked_fill_(p_mask.data, -float('inf'))
         P_s = F.softmax(logits1, 1)
 
         rnn_input = torch.bmm(P_s.unsqueeze(1), self_states).squeeze(1)
-        d_rnn_input = Dropout(rnn_input.unsqueeze(1), self.dropout, is_training).squeeze(1)
+        d_rnn_input = Dropout(rnn_input.unsqueeze(1), self.dropout, is_training, use_cuda = self.use_cuda).squeeze(1)
         end_states = self.rnn(d_rnn_input, init_states)
-        d_end_states = Dropout(end_states.unsqueeze(1), self.dropout, is_training).squeeze(1)
+        d_end_states = Dropout(end_states.unsqueeze(1), self.dropout, is_training, use_cuda = self.use_cuda).squeeze(1)
 
         P1 = self.W_e(d_end_states)
         logits2 = torch.bmm(P1.unsqueeze(1), self_states.transpose(2, 1)).squeeze(1)
         logits2.data.masked_fill_(p_mask.data, -float('inf'))
         return logits1, logits2
 
-def Dropout(x, dropout, is_train, return_mask = False, var=True, cuda=True) :
+def Dropout(x, dropout, is_train, return_mask = False, var=True, use_cuda=True) :
 
     if not var :
         return F.dropout(x, dropout, is_train)
@@ -185,7 +190,7 @@ def Dropout(x, dropout, is_train, return_mask = False, var=True, cuda=True) :
         keep_prob = 1.0 - dropout
         random_tensor = keep_prob
         tmp = Variable(torch.FloatTensor(shape[0], 1, shape[2]))
-        if cuda :
+        if use_cuda :
             tmp = tmp.cuda()
         nn.init.uniform(tmp)
         random_tensor += tmp

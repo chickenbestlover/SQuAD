@@ -1,24 +1,28 @@
 #coding: utf-8
 import argparse
 import torch
+import pickle as pkl
 import ujson as json
 from model import FusionNet
 from utils.dataset import load_data, get_batches
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--data_path', default='../SQuAD/')
-parser.add_argument('--model_dir', default='train_model/batch256_dropout0.3_hidden125-250',
+parser.add_argument('--model_dir', default='train_model/batch32_dropout0.3_hidden125-250',
                     help = 'path to store saved models.')
-parser.add_argument('--seed', default=8191)
-parser.add_argument('--cuda', default=True,
+parser.add_argument('--seed', default=1023)
+parser.add_argument('--use_cuda', default=True,
                     help = 'whether to use GPU acceleration.')
 
 ### parameters ###
-parser.add_argument('--epochs', type = int, default=50)
-parser.add_argument('--eval', type = bool, default=False)
-parser.add_argument('--batch_size', type = int, default=256)
+parser.add_argument('--epochs', type = int, default=60)
+parser.add_argument('--eval', type = bool, default=True)
+parser.add_argument('--batch_size', type = int, default=32)
+parser.add_argument('--grad_clipping', type = float, default = 10)
 parser.add_argument('--lrate', type = float, default=0.002)
 parser.add_argument('--dropout', type = float, default=0.3)
+parser.add_argument('--use_char', type = bool, default=False)
+parser.add_argument('--fix_embeddings', type = bool, default=False)
 parser.add_argument('--char_dim', type = int, default=50)
 parser.add_argument('--pos_dim', type = int, default=12)
 parser.add_argument('--ner_dim', type = int, default=8)
@@ -32,14 +36,12 @@ parser.add_argument('--decay', type = int, default=0.85)
 args = parser.parse_args()
 torch.manual_seed(args.seed)
 
-
-
 def train() :
 
     train_data, dev_data, word2id, char2id, opts = load_data(vars(args))
     model = FusionNet(opts)
 
-    if args.cuda :
+    if args.use_cuda :
         model = model.cuda()
 
     dev_batches = get_batches(dev_data, args.batch_size)
@@ -48,7 +50,7 @@ def train() :
         print ('load model...')
         model.load_state_dict(torch.load(args.model_dir))
         model.eval()
-        model.boundary_evaluate(dev_batches, args.data_path + 'dev_eval.json', answer_file = 'result/' + args.model_dir.split('/')[-1] + '.answers')
+        model.Evaluate(dev_batches, args.data_path + 'dev_eval.json', answer_file = 'result/' + args.model_dir.split('/')[-1] + '.answers')
         exit()
 
     train_batches = get_batches(train_data, args.batch_size)
@@ -59,20 +61,30 @@ def train() :
 
     lrate = args.lrate
     best_score = 0.0
-    for epoch in range(args.epochs) :
+    f1_scores = []
+    em_scores = []
+    for epoch in range(1, args.epochs+1) :
         model.train()
         for i, train_batch in enumerate(train_batches) :
            loss = model(train_batch)
            model.zero_grad()
            optimizer.zero_grad()
            loss.backward()
+           torch.nn.utils.clip_grad_norm(parameters, opts['grad_clipping'])
            optimizer.step()
+           model.reset_parameters()
 
-           if i % 20 == 0:
-               print('Epoch = %d, step = %d / %d, loss = %.5f, lrate = %.5f' % (epoch, i, total_size, loss, lrate))
+           if i % 100 == 0:
+               print('Epoch = %d, step = %d / %d, loss = %.5f, lrate = %.5f best_score = %.3f' % (epoch, i, total_size, loss, lrate, best_score))
 
         model.eval()
         exact_match_score, F1 = model.Evaluate(dev_batches, args.data_path + 'dev_eval.json', answer_file = 'result/' + args.model_dir.split('/')[-1] + '.answers')
+        f1_scores.append(F1)
+        em_scores.append(exact_match_score)
+        with open(args.model_dir + '_f1_scores.pkl', 'wb') as f :
+            pkl.dump(f1_scores, f)
+        with open(args.model_dir + '_em_scores.pkl', 'wb') as f :
+            pkl.dump(em_scores, f)
 
         if best_score < F1:
             best_score = F1
