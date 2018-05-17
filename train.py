@@ -1,9 +1,9 @@
 #coding: utf-8
 import argparse
-import os
 import torch
 import pickle as pkl
 import ujson as json
+import os
 from model import FusionNet
 from utils.dataset import load_data, get_batches
 
@@ -17,7 +17,7 @@ parser.add_argument('--use_cuda', default=True,
 
 ### parameters ###
 parser.add_argument('--epochs', type = int, default=30)
-parser.add_argument('--eval', type = bool, default=True)
+parser.add_argument('--eval', type = bool, default=False)
 parser.add_argument('--batch_size', type = int, default=32)
 parser.add_argument('--grad_clipping', type = float, default = 10)
 parser.add_argument('--lrate', type = float, default=0.002)
@@ -28,11 +28,11 @@ parser.add_argument('--char_dim', type = int, default=50)
 parser.add_argument('--pos_dim', type = int, default=12)
 parser.add_argument('--ner_dim', type = int, default=8)
 parser.add_argument('--evaluate', type = bool, default=False)
-parser.add_argument('--char_hidden_size', type = int, default=50)
+parser.add_argument('--char_hidden_size', type = int, default=100)
 parser.add_argument('--hidden_size', type = int, default=125)
 parser.add_argument('--attention_size', type = int, default=250)
-parser.add_argument('--decay_period', type = int, default=5)
-parser.add_argument('--decay', type = int, default=0.85)
+parser.add_argument('--decay_period', type = int, default=10)
+parser.add_argument('--decay', type = int, default=0.5)
 
 args = parser.parse_args()
 torch.manual_seed(args.seed)

@@ -61,7 +61,7 @@ class FusionNet(nn.Module):
         if self.use_char :
             self.char_embeddings = nn.Embedding(opts['char_size'], char_dim, padding_idx=0)
             self.char_rnn = nn.LSTM(input_size = char_dim,
-                                    hidden_size = hidden_size,
+                                    hidden_size = char_hidden_size,
                                     batch_first = True,
                                     bidirectional = True,
                                     num_layers = 1,
@@ -288,14 +288,12 @@ class FusionNet(nn.Module):
         passage_match_lemma = batch_data['passage_match_lemma']
         passage_tf = batch_data['passage_tf']
         p_mask = batch_data['p_mask']
-       # p_pad_mask = p_mask.eq(0).unsqueeze(2).float()
 
         ques_ids = batch_data['ques_ids']
         ques_char_ids = batch_data['ques_char_ids']
         ques_pos_ids = batch_data['ques_pos_ids']
         ques_ner_ids = batch_data['ques_ner_ids']
         q_mask = batch_data['q_mask']
-        #q_pad_mask = q_mask.eq(0).unsqueeze(2).float()
 
         opts = self.opts
         dropout = opts['dropout']
@@ -313,9 +311,9 @@ class FusionNet(nn.Module):
             d_ques_char_emb = Dropout(ques_char_emb, dropout, self.training, use_cuda = self.use_cuda)
 
             _, (h, c) = self.char_rnn(d_passage_char_emb)
-            passage_char_states = torch.cat([h[0], h[1]], dim=2).contiguous().view(-1, passage_ids.size(1), 2*char_hidden_size)
+            passage_char_states = torch.cat([h[0], h[1]], dim=1).contiguous().view(-1, passage_ids.size(1), 2*char_hidden_size)
             _, (h, c) = self.char_rnn(d_ques_char_emb)
-            ques_char_states = torch.cat([h[0], h[1]], dim=2).contiguous().view(-1, ques_ids.size(1), 2*char_hidden_size)
+            ques_char_states = torch.cat([h[0], h[1]], dim=1).contiguous().view(-1, ques_ids.size(1), 2*char_hidden_size)
 
         ### cove ###
         _, passage_cove = self.cove_rnn(passage_ids, p_mask)
@@ -337,7 +335,7 @@ class FusionNet(nn.Module):
         ques_cove = Dropout(ques_cove, dropout, self.training, use_cuda = self.use_cuda)
 
         ### Word Attention ###
-        word_attention_outputs = self.word_attention_layer(passage_emb, p_mask, ques_emb, q_mask, self.training)# * p_pad_mask
+        word_attention_outputs = self.word_attention_layer(passage_emb, p_mask, ques_emb, q_mask, self.training)
 
         p_word_inp = torch.cat([passage_emb, passage_cove, passage_pos_emb, passage_ner_emb, word_attention_outputs, passage_match_origin, passage_match_lower, passage_match_lemma, passage_tf], dim=2)
         q_word_inp = torch.cat([ques_emb, ques_cove, ques_pos_emb, ques_ner_emb], dim=2)
@@ -349,14 +347,14 @@ class FusionNet(nn.Module):
 
         ### low, high, understanding encoding ###
 
-        low_passage_states = self.low_passage_rnn(p_word_inp, self.training)# * p_pad_mask
-        low_ques_states = self.low_ques_rnn(q_word_inp, self.training)# * q_pad_mask
+        low_passage_states = self.low_passage_rnn(p_word_inp, self.training)
+        low_ques_states = self.low_ques_rnn(q_word_inp, self.training)
 
-        high_passage_states = self.high_passage_rnn(low_passage_states, self.training)# * p_pad_mask
-        high_ques_states = self.high_ques_rnn(low_ques_states, self.training)# * q_pad_mask
+        high_passage_states = self.high_passage_rnn(low_passage_states, self.training)
+        high_ques_states = self.high_ques_rnn(low_ques_states, self.training)
 
         und_ques_inp = torch.cat([low_ques_states, high_ques_states], dim=2)
-        und_ques_states = self.und_ques_rnn(und_ques_inp, self.training)# * q_pad_mask
+        und_ques_states = self.und_ques_rnn(und_ques_inp, self.training)
 
 
         ### Full Attention ###
@@ -364,23 +362,23 @@ class FusionNet(nn.Module):
         passage_HoW = torch.cat([passage_emb, passage_cove, low_passage_states, high_passage_states], dim=2)
         ques_HoW = torch.cat([ques_emb, ques_cove, low_ques_states, high_ques_states], dim=2)
 
-        low_attention_outputs = self.low_attention_layer(passage_HoW, p_mask, ques_HoW, q_mask, low_ques_states, self.training)# * p_pad_mask
-        high_attention_outputs = self.high_attention_layer(passage_HoW, p_mask, ques_HoW, q_mask, high_ques_states, self.training)# * p_pad_mask
-        und_attention_outputs = self.und_attention_layer(passage_HoW, p_mask, ques_HoW, q_mask, und_ques_states, self.training)# * p_pad_mask
+        low_attention_outputs = self.low_attention_layer(passage_HoW, p_mask, ques_HoW, q_mask, low_ques_states, self.training)
+        high_attention_outputs = self.high_attention_layer(passage_HoW, p_mask, ques_HoW, q_mask, high_ques_states, self.training)
+        und_attention_outputs = self.und_attention_layer(passage_HoW, p_mask, ques_HoW, q_mask, und_ques_states, self.training)
 
         fuse_inp = torch.cat([low_passage_states, high_passage_states, low_attention_outputs, high_attention_outputs, und_attention_outputs], dim = 2)
 
-        fused_passage_states = self.fuse_rnn(fuse_inp, self.training)# * p_pad_mask
+        fused_passage_states = self.fuse_rnn(fuse_inp, self.training)
 
         ### Self Full Attention ###
 
         passage_HoW = torch.cat([passage_emb, passage_cove, passage_pos_emb, passage_ner_emb, passage_tf, low_passage_states, high_passage_states, low_attention_outputs, high_attention_outputs, und_attention_outputs, fused_passage_states], dim=2)
 
-        self_attention_outputs = self.self_attention_layer(passage_HoW, p_mask, passage_HoW, p_mask, fused_passage_states, self.training)# * p_pad_mask
+        self_attention_outputs = self.self_attention_layer(passage_HoW, p_mask, passage_HoW, p_mask, fused_passage_states, self.training)
 
         self_inp = torch.cat([fused_passage_states, self_attention_outputs], dim=2)
 
-        und_passage_states = self.self_rnn(self_inp, self.training)# * p_pad_mask
+        und_passage_states = self.self_rnn(self_inp, self.training)
 
         return und_passage_states, p_mask, und_ques_states, q_mask
 
