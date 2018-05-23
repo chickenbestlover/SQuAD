@@ -15,7 +15,7 @@
 
 # Quick start
 1. ./download.sh
-2. python3 SQuAD_prepro.py
+2. python3 prepro.py
 3. python3 train.py
 
 # Performance
