@@ -8,7 +8,7 @@ from model import FusionNet
 from utils.dataset import load_data, get_batches
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--data_path', default='../SQuAD/')
+parser.add_argument('--data_path', default='./SQuAD/')
 parser.add_argument('--model_dir', default='train_model/batch32_dropout0.3_hidden125-250',
                     help = 'path to store saved models.')
 parser.add_argument('--seed', default=1023)
@@ -71,21 +71,23 @@ def train() :
     for epoch in range(1, args.epochs+1) :
         model.train()
         for i, train_batch in enumerate(train_batches) :
-           loss = model(train_batch)
-           model.zero_grad()
-           optimizer.zero_grad()
-           loss.backward()
-           torch.nn.utils.clip_grad_norm(parameters, opts['grad_clipping'])
-           optimizer.step()
-           model.reset_parameters()
+            with torch.enable_grad():
 
-           if i % 100 == 0:
-               print('Epoch = %d, step = %d / %d, loss = %.5f, lrate = %.5f best_score = %.3f' % (epoch, i, total_size, loss, lrate, best_score))
+                loss = model(train_batch)
+                model.zero_grad()
+                optimizer.zero_grad()
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(parameters, opts['grad_clipping'])
+                optimizer.step()
+                model.reset_parameters()
 
-        model.eval()
-        exact_match_score, F1 = model.Evaluate(dev_batches, args.data_path + 'dev_eval.json', answer_file = 'result/' + args.model_dir.split('/')[-1] + '.answers')
-        f1_scores.append(F1)
-        em_scores.append(exact_match_score)
+            if i % 100 == 0:
+                print('Epoch = %d, step = %d / %d, loss = %.5f, lrate = %.5f best_score = %.3f' % (epoch, i, total_size, loss, lrate, best_score))
+        with torch.no_grad():
+            model.eval()
+            exact_match_score, F1 = model.Evaluate(dev_batches, args.data_path + 'dev_eval.json', answer_file = 'result/' + args.model_dir.split('/')[-1] + '.answers')
+            f1_scores.append(F1)
+            em_scores.append(exact_match_score)
         with open(args.model_dir + '_f1_scores.pkl', 'wb') as f :
             pkl.dump(f1_scores, f)
         with open(args.model_dir + '_em_scores.pkl', 'wb') as f :

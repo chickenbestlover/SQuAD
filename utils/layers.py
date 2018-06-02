@@ -53,7 +53,7 @@ class FullAttention(nn.Module) :
         self.init_weights()
 
     def init_weights(self) :
-        nn.init.xavier_uniform(self.U.weight.data)
+        nn.init.xavier_uniform_(self.U.weight.data)
 
     def forward(self, passage, p_mask, question, q_mask, rep, is_training):
 
@@ -93,7 +93,7 @@ class WordAttention(nn.Module) :
         self.init_weights()
 
     def init_weights(self) :
-        nn.init.xavier_uniform(self.W.weight.data)
+        nn.init.xavier_uniform_(self.W.weight.data)
         self.W.bias.data.fill_(0.1)
 
     def forward(self, passage, p_mask, question, q_mask, is_training):
@@ -130,7 +130,7 @@ class Summ(nn.Module) :
         self.init_weights()
 
     def init_weights(self):
-        nn.init.xavier_uniform(self.w.weight.data)
+        nn.init.xavier_uniform_(self.w.weight.data)
         self.w.bias.data.fill_(0.1)
 
     def forward(self, x, mask, is_training) :
@@ -157,9 +157,9 @@ class PointerNet(nn.Module) :
 
     def init_weights(self) :
 
-        nn.init.xavier_uniform(self.W_s.weight.data)
+        nn.init.xavier_uniform_(self.W_s.weight.data)
         self.W_s.bias.data.fill_(0.1)
-        nn.init.xavier_uniform(self.W_e.weight.data)
+        nn.init.xavier_uniform_(self.W_e.weight.data)
         self.W_e.bias.data.fill_(0.1)
 
     def forward(self, self_states, p_mask, init_states, is_training) :
@@ -192,7 +192,7 @@ def Dropout(x, dropout, is_train, return_mask = False, var=True, use_cuda=True) 
         tmp = Variable(torch.FloatTensor(shape[0], 1, shape[2]))
         if use_cuda :
             tmp = tmp.cuda()
-        nn.init.uniform(tmp)
+        nn.init.uniform_(tmp)
         random_tensor += tmp
         binary_tensor = torch.floor(random_tensor)
         x = torch.div(x, keep_prob) * binary_tensor
