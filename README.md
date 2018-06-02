@@ -22,7 +22,7 @@
 * F1 = 83.15%
 * EM = 74.47%
 
-Add ELMo embedding
+Use ELMo instead of CoVe
 * F1 = 84.72%
 * EM = 76.82%
 
